@@ -2,10 +2,17 @@ import asyncio
 import logging
 
 from homeassistant import core
-from homeassistant.components.light import LightEntity, ColorMode, ATTR_BRIGHTNESS, ATTR_COLOR_TEMP, \
-    ATTR_COLOR_TEMP_KELVIN, LightEntityFeature, ATTR_EFFECT
+from homeassistant.components.light import (
+    LightEntity,
+    ColorMode,
+    ATTR_BRIGHTNESS,
+    ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
+    LightEntityFeature,
+    ATTR_EFFECT
+)
+from homeassistant.util.color import color_temperature_kelvin_to_mired as kelvin_to_mired
 from . import XiaoDuAPI, ApplianceTypes
-
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,58 +42,41 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
 
 
 class XiaoDuLight(LightEntity):
-
-    # def effect(self) -> str | None:
-    #     return 'test'
-    #
-    # def effect_list(self) -> list[str] | None:
-    #     return ['test']
-
     def __init__(self, api: XiaoDuAPI, name: str, if_on: bool, detail):
         self._api = api
         self._attr_unique_id = f"{api.applianceId}_light"
-        # self._attr_is_on = if_on
         self._attr_is_on = if_on
         self._attr_name = name
         self._group_name = detail['groupName']
         self.pColorMode = None
         self.effectList = {}
+        self._color_temp_kelvin = None  # 初始化色温属性
+
         if if_on:
             self._attr_icon = "mdi:lightbulb"
         else:
             self._attr_icon = "mdi:lightbulb-off"
 
-        # 新的集成必须同时实现color_mode和supported_color_modes。如果集成升级以支持颜色模式，则应同时实现color_mode和。supported_color_modes
-        # self._attr_color_mode = ColorMode.COLOR_TEMP
-        # 如果支持亮度控制 并且支持色温 有色温的应该都支持模式 不必判断
+        # 设置支持的颜色模式
         if 'brightness' in detail['stateSetting'] and 'colorTemperatureInKelvin' in detail['stateSetting']:
             self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
             self._attr_color_mode = ColorMode.COLOR_TEMP
             self.pColorMode = ColorMode.COLOR_TEMP
-            # brightness = detail['stateSetting']['brightness']['value']
-            # self._brightness = round(brightness / 100 * 255)
-            # 没有色温 只有亮度
-        if 'brightness' in detail['stateSetting'] and 'colorTemperatureInKelvin' not in detail['stateSetting']:
+        elif 'brightness' in detail['stateSetting']:
             self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
             self._attr_color_mode = ColorMode.BRIGHTNESS
             self.pColorMode = ColorMode.BRIGHTNESS
-            # brightness = detail['stateSetting']['brightness']['value']
-            # self._brightness = round(brightness / 100 * 255)
+        
+        # 处理灯光模式效果
         if 'mode' in detail['stateSetting']:
-            self._attr_supported_features = LightEntityFeature(
-                LightEntityFeature.EFFECT)
+            self._attr_supported_features = LightEntityFeature.EFFECT
             effect_list = []
             valueRangeMap = detail['stateSetting']['mode']['valueRangeMap']
             for i in valueRangeMap:
                 effect_list.append(valueRangeMap[i])
             self._attr_effect_list = effect_list
 
-        # 最基础的只有开和关 没有模式 色温 亮度控制
-        if 'mode' not in detail['stateSetting'] and 'brightness' not in detail[
-            'stateSetting'] and 'colorTemperatureInKelvin' not in detail['stateSetting']:
-            self._attr_supported_color_modes = {ColorMode.ONOFF}
-            self._attr_color_mode = ColorMode.ONOFF
-            self.pColorMode = ColorMode.ONOFF
+        # 默认只支持开关
         if self.pColorMode is None:
             self._attr_supported_color_modes = {ColorMode.ONOFF}
             self._attr_color_mode = ColorMode.ONOFF
@@ -97,49 +87,52 @@ class XiaoDuLight(LightEntity):
         return self._color_temp_kelvin
 
     async def async_turn_on(self, **kwargs):
-        # 如果kwargs为空就直接开 否则控制亮度
-        # {'brightness': 145} 1-255
-        # _LOGGER.info(kwargs)
-        # 开
-        if kwargs == {}:
+        # 基础开关控制
+        if not kwargs:
             flag = await self._api.switch_on()
-        # 控制亮度 计算亮度 1-255
-        if 'brightness' in kwargs:
-            brightness = kwargs.get(ATTR_BRIGHTNESS, 255)
-            attributeValue = round(brightness / 255 * 100)
-            self._brightness = brightness
-            flag = await self._api.brightness(attributeValue)
-        if 'color_temp_kelvin' in kwargs:
-            # 无传则居中
-            color_temp_kelvin = kwargs.get(ATTR_COLOR_TEMP_KELVIN, 4614)
-            color_temp = kwargs.get(ATTR_COLOR_TEMP, 261)
-            self._attr_color_temp_kelvin = color_temp_kelvin
-            # 将色温换算成比例
-            # (比例 / 100 * 差值)+最小=真实色温
-            mddile = self.max_color_temp_kelvin - self.min_color_temp_kelvin
-            attributeValue = round((color_temp_kelvin - self.min_color_temp_kelvin) / mddile * 100)
-            flag = await self._api.colorTemperatureInKelvin(attributeValue)
-        if 'effect' in kwargs:
-            effect = kwargs.get(ATTR_EFFECT, "读写")
-            mode = "READING"
-            for i in self.effectList:
-                if self.effectList[i] == effect:
-                    mode = i
-            flag = await self._api.light_set_mode(mode)
-        self._is_on = True
+        else:
+            # 亮度控制
+            if ATTR_BRIGHTNESS in kwargs:
+                brightness = kwargs[ATTR_BRIGHTNESS]
+                attributeValue = round(brightness / 255 * 100)
+                self._attr_brightness = brightness
+                flag = await self._api.brightness(attributeValue)
+            
+            # 色温控制（使用新的属性）
+            if ATTR_COLOR_TEMP_KELVIN in kwargs:
+                color_temp_kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
+                self._attr_color_temp_kelvin = color_temp_kelvin
+                self._color_temp_kelvin = color_temp_kelvin
+                
+                # 计算色温比例
+                mddile = self.max_color_temp_kelvin - self.min_color_temp_kelvin
+                attributeValue = round((color_temp_kelvin - self.min_color_temp_kelvin) / mddile * 100)
+                flag = await self._api.colorTemperatureInKelvin(attributeValue)
+            
+            # 效果模式控制
+            if ATTR_EFFECT in kwargs:
+                effect = kwargs[ATTR_EFFECT]
+                mode = "READING"  # 默认模式
+                for key, value in self.effectList.items():
+                    if value == effect:
+                        mode = key
+                        break
+                flag = await self._api.light_set_mode(mode)
+
+        # 更新状态
+        self._attr_is_on = True
         self._attr_icon = "mdi:lightbulb"
-        # await self.async_update()
         self.async_schedule_update_ha_state(True)
 
     async def async_turn_off(self, **kwargs):
         flag = await self._api.switch_off()
-        self._is_on = False
+        self._attr_is_on = False
         self._attr_icon = "mdi:lightbulb-off"
-        # await self.async_update()
         self.async_schedule_update_ha_state(True)
-        # 如果状态错误 回退
+        
+        # 控制失败时回退状态
         if not flag:
-            self._is_on = True
+            self._attr_is_on = True
             self._attr_icon = "mdi:lightbulb"
             self.async_schedule_update_ha_state(True)
 
@@ -148,53 +141,60 @@ class XiaoDuLight(LightEntity):
         await asyncio.create_task(self.amen_update())
 
     async def amen_update(self):
-        # self._is_on = await self._api.switch_status()
         detail = await self._api.get_detail()
+        if not detail:
+            return
+            
         detail = detail['appliance']
-        turnOnState = str(detail['stateSetting']['turnOnState']['value']).lower()
-        if turnOnState == "on":
-            turnOnState = True
-        else:
-            turnOnState = False
+        # 更新开关状态
+        turnOnState = str(detail['stateSetting']['turnOnState']['value']).lower() == "on"
         self._attr_is_on = turnOnState
+
+        # 更新效果模式列表
         if 'mode' in detail['stateSetting']:
             self.effectList = detail['stateSetting']['mode']['valueRangeMap']
-        if self.pColorMode == ColorMode.BRIGHTNESS:
-            # 更新亮度
+            self._attr_supported_features = LightEntityFeature.EFFECT
+            effect_list = [v for v in self.effectList.values()]
+            self._attr_effect_list = effect_list
+            
+            # 更新当前效果模式
+            if 'value' in detail['stateSetting']['mode']:
+                mode = detail['stateSetting']['mode']['value']
+                self._attr_effect = self.effectList.get(mode)
+
+        # 更新亮度（确保转换为整数）
+        if self.pColorMode in (ColorMode.BRIGHTNESS, ColorMode.COLOR_TEMP) and 'brightness' in detail['stateSetting']:
             brightness = detail['stateSetting']['brightness']['value']
-            self._attr_brightness = round(brightness / 100 * 255)
-            # self._attr_brightness = brightness
-        elif self.pColorMode == ColorMode.COLOR_TEMP:
-            # 更新亮度
-            brightness = detail['stateSetting']['brightness']['value']
-            self._attr_brightness = round(brightness / 100 * 255)
-            # 更新色温和色温范围 得到的色温是比例
-            colorTemperatureInKelvin = detail['stateSetting']['colorTemperatureInKelvin']['value']
-            # 换算色温比例
-            colorTemperatureInKelvinMin = detail['stateSetting']['colorTemperatureInKelvin']['valueKelvinRangeMap'][
-                'min']
-            colorTemperatureInKelvinMax = detail['stateSetting']['colorTemperatureInKelvin']['valueKelvinRangeMap'][
-                'max']
-            self._attr_min_color_temp_kelvin = colorTemperatureInKelvinMin
-            self._attr_min_mireds = colorTemperatureInKelvinMin
-            self._attr_max_color_temp_kelvin = colorTemperatureInKelvinMax
-            self._attr_max_mireds = colorTemperatureInKelvinMax
-            mddile = colorTemperatureInKelvinMax - colorTemperatureInKelvinMin
-            # (比例 / 100 * 差值)+最小=真实色温
-            colorTemperatureInKelvin = round(colorTemperatureInKelvin / 100 * mddile) + colorTemperatureInKelvinMin
-            self._attr_color_temp_kelvin = colorTemperatureInKelvin
-            self._color_temp_kelvin = colorTemperatureInKelvin
-            # 模式
-            if 'mode' in detail['stateSetting']:
-                self._attr_supported_features = LightEntityFeature(
-                    LightEntityFeature.EFFECT)
-                effect_list = []
-                valueRangeMap = detail['stateSetting']['mode']['valueRangeMap']
-                for i in valueRangeMap:
-                    effect_list.append(valueRangeMap[i])
-                self._attr_effect_list = effect_list
-                if 'value' not in detail['stateSetting']['mode']:
-                    mode = "NIGHT_UP"
-                else:
-                    mode = detail['stateSetting']['mode']['value']
-                self._attr_effect = valueRangeMap[mode]
+            # 修复类型错误：将字符串转换为整数
+            try:
+                brightness_int = int(brightness)
+                self._attr_brightness = round(brightness_int / 100 * 255)
+            except (ValueError, TypeError) as e:
+                _LOGGER.error(f"无法转换亮度值: {brightness}, 错误: {e}")
+
+        # 更新色温
+        if self.pColorMode == ColorMode.COLOR_TEMP and 'colorTemperatureInKelvin' in detail['stateSetting']:
+            # 获取色温比例和范围
+            color_temp_ratio = detail['stateSetting']['colorTemperatureInKelvin']['value']
+            try:
+                color_temp_ratio = int(color_temp_ratio)
+            except (ValueError, TypeError) as e:
+                _LOGGER.error(f"无法转换色温比例: {color_temp_ratio}, 错误: {e}")
+                return
+
+            # 色温范围
+            temp_range = detail['stateSetting']['colorTemperatureInKelvin']['valueKelvinRangeMap']
+            min_kelvin = temp_range.get('min', 2700)
+            max_kelvin = temp_range.get('max', 6500)
+            
+            # 更新色温属性
+            self._attr_min_color_temp_kelvin = min_kelvin
+            self._attr_max_color_temp_kelvin = max_kelvin
+            self._attr_min_mireds = kelvin_to_mired(min_kelvin)
+            self._attr_max_mireds = kelvin_to_mired(max_kelvin)
+            
+            # 计算实际色温值
+            mddile = max_kelvin - min_kelvin
+            color_temp_kelvin = round((color_temp_ratio / 100 * mddile) + min_kelvin)
+            self._attr_color_temp_kelvin = color_temp_kelvin
+            self._color_temp_kelvin = color_temp_kelvin
