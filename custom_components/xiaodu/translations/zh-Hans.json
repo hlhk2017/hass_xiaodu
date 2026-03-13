@@ -26,6 +26,34 @@
       "params.invalid": "输入错误"
     },
     "title": "小度智能设备"
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "配置选项",
+        "menu_options": {
+          "user": "更新 Cookie",
+          "device_select": "筛选/添加设备"
+        }
+      },
+      "user": {
+        "title": "更新 Cookie",
+        "data": {
+          "BAIDUID_COOKIE": "小度网站COOKIE"
+        }
+      },
+      "device_select": {
+        "title": "筛选设备",
+        "description": "请选择您希望保留在 Home Assistant 中的设备",
+        "data": {
+          "device_ids": "选择设备"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接到服务器",
+      "invalid_auth": "Cookie 验证失败",
+      "no_devices_found": "未找到设备"
+    }
   }
 }
-  

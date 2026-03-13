@@ -2,29 +2,58 @@
   "config": {
     "step": {
       "user": {
-        "title": "小度智能设备",
-        "description": "填写教程：",
+        "title": "XiaoDu Devices",
+        "description": "Guide: https://blog.ymypay.cn/index.php/2024/11/22/homeassistant_xiaodu_plugin/#htoc-",
         "data": {
-          "BAIDUID_COOKIE": "小度网站COOKIE"
+          "BAIDUID_COOKIE": "Baidu Cookie"
         }
       },
       "home": {
-        "title": "小度智能设备",
-        "description": "选择小度App中的家庭ID(单选)"
+        "title": "XiaoDu Devices",
+        "description": "Select Home ID (Single select)"
       },
       "device": {
-        "title": "小度智能设备",
-        "description": "选择需要添加的设备(可多选)"
+        "title": "XiaoDu Devices",
+        "description": "Select devices to add (Multi select)"
       }
     },
     "error": {
-      "cannot_connect": "无法连接到设备",
-      "invalid_auth": "登录失败",
-      "unknown": "发生未知错误",
-      "Unknown error occurred": "发生未知错误",
-      "cannot_xiaodu": "连接到小度服务器错误",
-      "params.invalid": "输入错误"
+      "cannot_connect": "Cannot connect to device",
+      "invalid_auth": "Login failed",
+      "unknown": "Unknown error",
+      "Unknown error occurred": "Unknown error",
+      "cannot_xiaodu": "XiaoDu server error",
+      "params.invalid": "Invalid input"
     },
-    "title": "小度智能设备"
+    "title": "XiaoDu Devices"
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "menu_options": {
+          "user": "Update Cookie",
+          "device_select": "Filter/Add Devices"
+        }
+      },
+      "user": {
+        "title": "Update Cookie",
+        "data": {
+          "BAIDUID_COOKIE": "Baidu Cookie"
+        }
+      },
+      "device_select": {
+        "title": "Filter Devices",
+        "description": "Select devices to keep in Home Assistant",
+        "data": {
+          "device_ids": "Select Devices"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to server",
+      "invalid_auth": "Cookie validation failed",
+      "no_devices_found": "No devices found"
+    }
   }
 }
