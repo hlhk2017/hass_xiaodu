@@ -42,13 +42,16 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
                     headerName = p['headerName']
                     break
                 entities.append(
-                    XiaoduButton(api[device_id], name + "_" + switchName, group_name, bot_name, TypeStr, TypeValue, headerName))
+                    XiaoduButton(api[device_id], name + "_" + switchName, group_name, bot_name, detail['appliance'], TypeStr, TypeValue, headerName))
     async_add_entities(entities, True)
 
 
 class XiaoduButton(ButtonEntity):
-    def __init__(self, api: XiaoDuAPI, name: str, group_name: str, bot_name: str, switchType: str, typeValue: str, headerName:str):
+    _attr_has_entity_name = True
+
+    def __init__(self, api: XiaoDuAPI, name: str, group_name: str, bot_name: str, detail: dict, switchType: str, typeValue: str, headerName:str):
         self._api = api
+        self._detail = detail
         #  重复实体的 uid 会重复 来一个独一无二的
         if switchType != "switch":
             self._attr_unique_id = f"{api.applianceId}_switch_{switchType}_{typeValue}"
@@ -61,6 +64,21 @@ class XiaoduButton(ButtonEntity):
         self.switchType = switchType
         self.typeValue = typeValue
         self.headerName = headerName
+
+    @property
+    def device_info(self):
+        """返回设备信息以支持设备注册和区域分配"""
+        floor_name = self._detail.get('floorName', '')
+        room_name = self._detail.get('roomName', '')
+        suggested_area = f"{floor_name}{room_name}" if floor_name or room_name else None
+        
+        return {
+            "identifiers": {(DOMAIN, self._api.applianceId)},
+            "name": self._detail.get('friendlyName', self._attr_name),
+            "manufacturer": self._detail.get('botName', 'Baidu'),
+            "model": ",".join(self._detail.get('applianceTypes', [])),
+            "suggested_area": suggested_area,
+        }
 
     async def async_press(self) -> None:
         """Handle the button press."""

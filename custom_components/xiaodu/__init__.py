@@ -31,18 +31,23 @@ async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.Conf
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
     session = async_get_clientsession(hass)
-    applianceTypes = entry.data["applianceTypes"]
+    appliance_data_list = entry.data["applianceTypes"]
     # Setup devices based on the selected devices from the config flow
-    for i, device_info in enumerate(entry.data["devices"]):
+    for device_info in entry.data["devices"]:
         applianceId = device_info["applianceId"]
         houseId = device_info["houseId"]
         cookie = device_info["cookie"]
+        
+        # 通过 applianceId 匹配对应的设备类型数据，避免索引不匹配导致的类型反转问题
+        target_appliance = next((a for a in appliance_data_list if a.get('applianceId') == applianceId), None)
+        types = target_appliance.get('applianceTypes', []) if target_appliance else []
+        
         hass.data[DOMAIN][entry.entry_id][applianceId] = XiaoDuAPI(
             applianceId=applianceId,
             houseId=houseId,
             cookie=cookie,
             session=session,
-            applianceTypes=applianceTypes[i]['applianceTypes']
+            applianceTypes=types
         )
     # 更新配置 由async_update_entry触发
     if not entry.update_listeners:

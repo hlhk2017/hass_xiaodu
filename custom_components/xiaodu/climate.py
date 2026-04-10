@@ -34,10 +34,13 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
 
 
 class XiaoDuClimate(ClimateEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, api: XiaoDuAPI, name: str, if_on: bool, detail):
         self._api = api
+        self._detail = detail
         self._attr_name = name
-        self._attr_unique_id = f"{api.applianceId}_cover"
+        self._attr_unique_id = f"{api.applianceId}_climate"
         # 支持的功能 小度 只能 开 关 温度 模式 风速
         self._attr_supported_features = (
                 ClimateEntityFeature.TURN_ON |
@@ -83,6 +86,21 @@ class XiaoDuClimate(ClimateEntity):
             "fan": HVACMode.FAN_ONLY
         }
         self.detail = None
+
+    @property
+    def device_info(self):
+        """返回设备信息以支持设备注册和区域分配"""
+        floor_name = self._detail.get('floorName', '')
+        room_name = self._detail.get('roomName', '')
+        suggested_area = f"{floor_name}{room_name}" if floor_name or room_name else None
+        
+        return {
+            "identifiers": {(DOMAIN, self._api.applianceId)},
+            "name": self._detail.get('friendlyName', self._attr_name),
+            "manufacturer": self._detail.get('botName', 'Baidu'),
+            "model": ",".join(self._detail.get('applianceTypes', [])),
+            "suggested_area": suggested_area,
+        }
 
     async def async_turn_on(self):
         """Turn the entity on."""
@@ -134,21 +152,28 @@ class XiaoDuClimate(ClimateEntity):
 
     async def async_update(self):
         self.detail = await self._api.get_detail()
+        if not self.detail or 'appliance' not in self.detail:
+            return
+            
         detail = self.detail['appliance']
-        stateSetting = detail['stateSetting']
+        stateSetting = detail.get('stateSetting', {})
+        
         if 'fanSpeed' not in stateSetting:
             fanSpeed = FAN_MEDIUM
         else:
-            fanSpeed = stateSetting['fanSpeed']['value']
+            fanSpeed = stateSetting['fanSpeed'].get('value', 2)
+            
         if 'temperature' not in stateSetting:
             temperature = 26
         else:
-            temperature = stateSetting['temperature']['value']
+            temperature = stateSetting['temperature'].get('value', 26)
+            
         if 'mode' not in stateSetting:
             mode = 'cool'
         else:
-            mode = stateSetting['mode']['value']
-        turnOnState = detail['stateSetting']['turnOnState']['value']
+            mode = stateSetting['mode'].get('value', 'cool')
+            
+        turnOnState = stateSetting.get('turnOnState', {}).get('value', 'off')
         if turnOnState.lower() == 'on':
             self._attr_hvac_mode = self._ac_mode_lookup2.get(str(mode).lower(), str(mode).lower())
         else:

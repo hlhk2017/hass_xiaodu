@@ -54,7 +54,7 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
                         if i == 1:
                             headerNameOff = p['headerName']
                     entities.append(
-                        XiaoduSwitch(api[device_id], name + "_" + switchName, if_on, group_name, bot_name, TypeStr,
+                        XiaoduSwitch(api[device_id], name + "_" + switchName, if_on, group_name, bot_name, detail['appliance'], TypeStr,
                                      TypeValue, headerNameOn, headerNameOff, payload))
             else:
                 if_onS = str(detail['appliance']['stateSetting']['turnOnState']['value']).lower()
@@ -62,7 +62,7 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
                     if_on = True
                 else:
                     if_on = False
-                entities.append(XiaoduSwitch(api[device_id], name, if_on, group_name, bot_name))
+                entities.append(XiaoduSwitch(api[device_id], name, if_on, group_name, bot_name, detail['appliance']))
         except Exception as e:
             _LOGGER.error(e)
             continue
@@ -70,9 +70,12 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
 
 
 class XiaoduSwitch(SwitchEntity):
-    def __init__(self, api: XiaoDuAPI, name: str, if_on: bool, groupName: str, botName: str, switchType: str = "switch",
+    _attr_has_entity_name = True
+
+    def __init__(self, api: XiaoDuAPI, name: str, if_on: bool, groupName: str, botName: str, detail: dict, switchType: str = "switch",
                  typeValue: str = None, headerNameOn: str = None, headerNameOff: str = None, payloadObject: str = None):
         self._api = api
+        self._detail = detail
         #  重复实体的 uid 会重复 来一个独一无二的
         if switchType != "switch":
             self._attr_unique_id = f"{api.applianceId}_switch_{switchType}_{typeValue}"
@@ -94,10 +97,17 @@ class XiaoduSwitch(SwitchEntity):
 
     @property
     def device_info(self):
+        """返回设备信息以支持设备注册和区域分配"""
+        floor_name = self._detail.get('floorName', '')
+        room_name = self._detail.get('roomName', '')
+        suggested_area = f"{floor_name}{room_name}" if floor_name or room_name else None
+        
         return {
             "identifiers": {(DOMAIN, self._api.applianceId)},
-            "name": self._name,
-            "manufacturer": self._group_name,
+            "name": self._detail.get('friendlyName', self._name),
+            "manufacturer": self._detail.get('botName', 'Baidu'),
+            "model": ",".join(self._detail.get('applianceTypes', [])),
+            "suggested_area": suggested_area,
         }
 
     @property

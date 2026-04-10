@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 
 from homeassistant import core
@@ -41,11 +41,14 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry, async_add_en
 
 
 class XiaoDuLight(LightEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, api: XiaoDuAPI, name: str, if_on: bool, detail):
         self._api = api
         self._attr_unique_id = f"{api.applianceId}_light"
         self._attr_is_on = if_on
         self._attr_name = name
+        self._detail = detail
         self._group_name = detail['groupName']
         self.pColorMode = None
         self.effectList = {}
@@ -79,6 +82,21 @@ class XiaoDuLight(LightEntity):
             for i in valueRangeMap:
                 effect_list.append(valueRangeMap[i])
             self._attr_effect_list = effect_list
+
+    @property
+    def device_info(self):
+        """返回设备信息以支持设备注册和区域分配"""
+        floor_name = self._detail.get('floorName', '')
+        room_name = self._detail.get('roomName', '')
+        suggested_area = f"{floor_name}{room_name}" if floor_name or room_name else None
+        
+        return {
+            "identifiers": {(DOMAIN, self._api.applianceId)},
+            "name": self._attr_name,
+            "manufacturer": self._detail.get('botName', 'Baidu'),
+            "model": ",".join(self._detail.get('applianceTypes', [])),
+            "suggested_area": suggested_area,
+        }
 
     @property
     def color_temp_kelvin(self) -> int | None:
