@@ -26,13 +26,12 @@ class XiaoDuAPI:
         submit = {"url": "dueros://smarthome.bot.dueros.ai/gateway/myspeaker"}
         try:
             res = await self.Session.post(HOST + "/appserver/gateway/app/v1", json=submit, headers=self.Header)
-            json = await res.json()
-            if json['status'] != 0:
+            data = await res.json()
+            if data['status'] != 0:
                 return [False, "invalid_auth"]
             return [True, None]
         except Exception as e:
-            logging.error("检查cookie 请求小度出错")
-            logging.error(str(e))
+            _LOGGER.error("检查cookie 请求小度出错: %s", e)
             return [False, "cannot_xiaodu"]
 
     async def auth(self) -> bool:
@@ -45,12 +44,14 @@ class XiaoDuAPI:
         api = "/saiya/smarthome/devicelist?from=h5_control&withscene=1&generalscene=3"
         try:
             res = await self.Session.get(HOST + api, headers=self.Header)
-            # logging.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status_code, res.json())
+            # _LOGGER.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
 
-            json = await res.json()
-            return json['data']['appliances']
+            data = await res.json()
+            appliances = data.get('data', {}).get('appliances', [])
+            _LOGGER.info("获取到设备列表 (doDeviceList): %s", json.dumps(appliances, ensure_ascii=False))
+            return appliances
         except Exception as e:
-            logging.error("请求小度出错")
+            _LOGGER.error("请求小度出错 (doDeviceList): %s", e)
             return []
 
     async def switch_on(self):
@@ -84,14 +85,15 @@ class XiaoDuAPI:
         try:
             res = await self.Session.get(HOST + api, headers=self.Header, json=submit,
                                          cookies={"HOUSE_ID": self.houseId})
-            # logging.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status_code, res.json())
+            # _LOGGER.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
 
-            json = await res.json()
-            if json['status'] == 0:
-                return json['data']
+            data = await res.json()
+            if data['status'] == 0:
+                _LOGGER.info("获取到设备详情 (get_details): %s", json.dumps(data['data'], ensure_ascii=False))
+                return data['data']
             return {}
         except Exception as e:
-            logging.error("请求小度出错")
+            _LOGGER.error("请求小度出错 (get_detail): %s", e)
             return {}
 
     async def get_details(self, houseId: str, applianceIds: list):
@@ -101,15 +103,14 @@ class XiaoDuAPI:
                              "enablecache": True}}
         try:
             res = await self.Session.get(HOST + api, headers=self.Header, json=submit, cookies={"HOUSE_ID": houseId})
-            # logging.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status_code, res.json())
+            # _LOGGER.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
 
-            json = await res.json()
-            if json['status'] == 0:
-                return json['data']
+            data = await res.json()
+            if data['status'] == 0:
+                return data['data']
             return {}
         except Exception as e:
-            logging.error("请求小度出错")
-            logging.error(str(e))
+            _LOGGER.error("请求小度出错 (get_details): %s", e)
             return {}
 
     async def switch_toggle(self, method: bool):
@@ -244,10 +245,10 @@ class XiaoDuAPI:
         submit = {"method": "HOUSE_LIST"}
         try:
             res = await self.Session.post(HOST + api, json=submit, headers=self.Header)
-            # logging.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
+            # _LOGGER.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
 
-            json = await res.json()
-            houseList = json['data']['houseList']
+            data = await res.json()
+            houseList = data['data']['houseList']
             houseList_2 = {}
             # ha的select需要json来显示用单列表不行
             for i in houseList:
@@ -255,8 +256,7 @@ class XiaoDuAPI:
                 houseList_2[i['houseId']] = i['houseName']
             return houseList_2
         except Exception as e:
-            logging.error("获取房屋 请求小度出错")
-            logging.error(str(e))
+            _LOGGER.error("获取房屋 请求小度出错: %s", e)
             return []
 
     async def get_device_wifi_id(self, houseId: str):
@@ -265,13 +265,14 @@ class XiaoDuAPI:
             submit = {"method": "GET_USER_ALL_APPLIANCES",
                       "params": {"from": "h5_control", "withscene": 1, "generalscene": 3}}
             res = await self.Session.post(HOST + api, headers=self.Header, cookies={"HOUSE_ID": houseId}, json=submit)
-            # logging.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
+            # _LOGGER.info("request \n %s \n %s \n %s \t %s", HOST + api, '', res.status, await res.json())
 
-            json = await res.json()
-            return json['data']['appliances']
+            data = await res.json()
+            appliances = data.get('data', {}).get('appliances', [])
+            _LOGGER.info("获取到设备列表 (get_device_wifi_id): %s", json.dumps(appliances, ensure_ascii=False))
+            return appliances
         except Exception as e:
-            logging.error("请求小度出错")
-            logging.error(str(e))
+            _LOGGER.error("请求小度出错 (get_device_wifi_id): %s", e)
             return []
 
     async def get_device_wifi_id_dict(self, houseId: str):
@@ -447,14 +448,14 @@ class XiaoDuAPI:
         try:
             res = await self.Session.get(HOST + api, headers=self.Header, json=submit,
                                          cookies={"HOUSE_ID": self.houseId})
-            json = await res.json()
-            if json['status'] == 0:
+            data = await res.json()
+            if data['status'] == 0:
                 return [True, None]
-            if json['msg'] == 'not login':
+            if data['msg'] == 'not login':
                 return [False, "cookie失效喔，请及时更新"]
-            return [False, json['msg']]
+            return [False, data['msg']]
         except Exception as e:
-            logging.error("请求小度出错")
+            _LOGGER.error("请求小度出错 (send_command): %s", e)
             return [False, "请求小度出错"]
 
     def _common_header(self):
